@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<!-- Wider variant of table_narrow.urdf for the UR5 + Tesollo task.
+
+     table_narrow is 0.475 x 0.4 m. The SimToolReal tool pool reaches an
+     assembled span of 0.42 m (hammer: 0.30 m handle + 0.12 m head), so a tool
+     spawned anywhere in the +-0.1 m reset box can hang over the edge and roll
+     off before the policy acts. 0.70 x 0.70 m covers the +-0.1 m box plus the
+     worst-case half-span (0.21 m) with margin.
+
+     Same 0.3 m height and 500 kg static mass as table_narrow, so the table top
+     stays at reset.table_reset_z + 0.15. -->
+<robot name="box">
+  <link name="box">
+    <visual>
+      <material name="wood">
+        <color rgba="0.82 0.56 0.35 1.0"/>
+      </material>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.7 0.7 0.3"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0"/>
+      <geometry>
+        <box size="0.7 0.7 0.3"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="500"/>
+      <friction value="1.0"/>
+      <inertia ixx="1000.0" ixy="0.0" ixz="0.0" iyy="1000.0" iyz="0.0" izz="1000.0"/>
+    </inertial>
+  </link>
+</robot>

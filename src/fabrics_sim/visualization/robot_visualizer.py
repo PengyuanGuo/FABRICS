@@ -14,11 +14,11 @@ class RobotVisualizer():
     def __init__(self, robot_dir_name, robot_name, batch_size, device,
                  robot_body_sphere_radii, robot_body_sphere_position,
                  world_model, vertical_offset, fabric_joint_names,
-                 spacing=3.):
+                 spacing=3., robot_usd_path=None, simulation_app=None):
 
         ## Isaac Sim related imports
         from isaacsim import SimulationApp
-        self.simulation_app = SimulationApp({"headless": False})
+        self.simulation_app = simulation_app or SimulationApp({"headless": False})
 
         from omni.isaac.core import SimulationContext
         #from omni.isaac.core.articulations import Articulation
@@ -54,7 +54,7 @@ class RobotVisualizer():
             self.world.scene.add(self.robot_sphere_view)
 
         # add robot articulations
-        robot_path = get_robot_usd_path(robot_dir_name, robot_name)
+        robot_path = robot_usd_path or get_robot_usd_path(robot_dir_name, robot_name)
 
         for i in range(batch_size):
             robot_str = "/World/Robot_" + str(i + 1)

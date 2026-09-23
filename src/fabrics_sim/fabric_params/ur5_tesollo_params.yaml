@@ -1,0 +1,238 @@
+# UR5 + Tesollo DG5F-S (left) fabric parameters — Variant A (cspace).
+#
+# Source of truth for the SimToolReal integration. Also mirrored under
+# fabrics_sim/fabric_params/ so BaseFabric.load_params("ur5_tesollo_params.yaml")
+# works for standalone Phase 1 tests.
+#
+# Sphere frame names must match
+#   models/robots/urdf/ur5_tesollo/ur5_dg5fs_left_fabric.urdf
+# (regenerate with ur5_tesollo_description/build_fabric_urdf.py --print-frames).
+#
+# Joint order for acceleration/jerk (26): 6 UR5 arm + 20 hand
+#   (left_joint_{1..5}_{1..4}, thumb first).
+
+fabric_params:
+    # HD2 geometric posture attractor (not forcing). Target = default_config
+    # set in Ur5TesolloFabric (arm home + lightly curled fingers).
+    cspace_attractor:
+        min_isotropic_mass: 1.
+        max_isotropic_mass: 1.
+        mass_sharpness: 20.0
+        mass_switch_offset: 1.
+        conical_sharpness: 20.
+        conical_gain: 1.
+
+    # Variant A: HD1 forcing attractor on full C-space (policy q* target).
+    # Gains seeded from Kuka hand_attractor / ADEPT B.2 structure.
+    forcing_cspace_attractor:
+        min_isotropic_mass: 8.
+        max_isotropic_mass: 8.
+        mass_sharpness: 20.
+        mass_switch_offset: 0.5
+        conical_sharpness: 40.
+        conical_gain: 50.
+        damping: 50.
+        damping_sharpness: 10.
+        damping_radius: 0.2
+
+    joint_limit_repulsion:
+        velocity_gate: True
+        breakaway_distance: 0.0
+        breakaway_velocity: 0.
+        soft_relu_gain: 8.
+        metric_scalar: 0.02
+        metric_exploder_offset: 0.1
+        max_metric: 100.
+        damping_gain: 8.
+
+    # Kept for Variant B (palm + PCA / raw hand). Unused by Variant A construct_fabric.
+    hand_attractor:
+        min_isotropic_mass: 8.
+        max_isotropic_mass: 8.
+        mass_sharpness: 20.
+        mass_switch_offset: 0.5
+        conical_sharpness: 40.
+        conical_gain: 50.
+        damping: 50.
+        damping_sharpness: 10.
+        damping_radius: 0.2
+    palm_attractor:
+        min_isotropic_mass: 1.
+        max_isotropic_mass: 1.
+        mass_sharpness: 10.
+        mass_switch_offset: 0.5
+        conical_sharpness: 40.
+        conical_gain: 50.
+        damping: 50.
+        damping_sharpness: 10.
+        damping_radius: 0.2
+
+    body_repulsion:
+      max_depth: 2.
+      min_depth: 0.01
+      engage_depth: 0.5
+      breakaway_depth: 0.0
+      breakaway_velocity: 0.
+      metric_scalar: 1.
+      velocity_gate: True
+      velocity_gate_sharpness: 1000.
+      velocity_gate_offset: 0.002
+      rescaled_min_dist: .01
+      forcing_metric_scalar: .01
+      geom_metric_scalar: .01
+      constant_accel: 1.
+      constant_accel_geom: 5.
+      damping_gain: 0.
+      # 53 spheres: 12 arm, 6 palm, 35 finger (3 per distal link incl. tip); build_fabric_urdf.py --params syncs these.
+      collision_sphere_frames:
+          - ur5_shoulder_link_sphere1
+          - ur5_upper_arm_link_sphere1
+          - ur5_upper_arm_link_sphere2
+          - ur5_upper_arm_link_sphere3
+          - ur5_upper_arm_link_sphere4
+          - ur5_forearm_link_sphere1
+          - ur5_forearm_link_sphere2
+          - ur5_forearm_link_sphere3
+          - ur5_forearm_link_sphere4
+          - ur5_wrist_1_link_sphere1
+          - ur5_wrist_2_link_sphere1
+          - ur5_wrist_3_link_sphere1
+          - left_link_base_sphere1
+          - left_link_base_sphere2
+          - palm_sphere
+          - palm_sphere2
+          - palm_sphere3
+          - palm_sphere4
+          - left_link_1_2_sphere1
+          - left_link_1_2_sphere2
+          - left_link_1_3_sphere1
+          - left_link_1_3_sphere2
+          - left_link_1_4_sphere1
+          - left_link_1_4_sphere2
+          - left_link_1_4_sphere3
+          - left_link_2_2_sphere1
+          - left_link_2_2_sphere2
+          - left_link_2_3_sphere1
+          - left_link_2_3_sphere2
+          - left_link_2_4_sphere1
+          - left_link_2_4_sphere2
+          - left_link_2_4_sphere3
+          - left_link_3_2_sphere1
+          - left_link_3_2_sphere2
+          - left_link_3_3_sphere1
+          - left_link_3_3_sphere2
+          - left_link_3_4_sphere1
+          - left_link_3_4_sphere2
+          - left_link_3_4_sphere3
+          - left_link_4_2_sphere1
+          - left_link_4_2_sphere2
+          - left_link_4_3_sphere1
+          - left_link_4_3_sphere2
+          - left_link_4_4_sphere1
+          - left_link_4_4_sphere2
+          - left_link_4_4_sphere3
+          - left_link_5_2_sphere1
+          - left_link_5_2_sphere2
+          - left_link_5_3_sphere1
+          - left_link_5_3_sphere2
+          - left_link_5_4_sphere1
+          - left_link_5_4_sphere2
+          - left_link_5_4_sphere3
+      # Metres. Arm: hand-tuned (ARM_RADII in build_fabric_urdf.py). Hand: clipped-mesh fit + 1 mm.
+      collision_sphere_radii:
+          - 0.105
+          - 0.06
+          - 0.06
+          - 0.06
+          - 0.09
+          - 0.045
+          - 0.04
+          - 0.04
+          - 0.06
+          - 0.055
+          - 0.06
+          - 0.05
+          - 0.032
+          - 0.0316
+          - 0.034
+          - 0.0316
+          - 0.0313
+          - 0.0287
+          - 0.017
+          - 0.0178
+          - 0.0161
+          - 0.0169
+          - 0.0142
+          - 0.0159
+          - 0.014
+          - 0.0169
+          - 0.0161
+          - 0.0169
+          - 0.0161
+          - 0.0136
+          - 0.0145
+          - 0.0127
+          - 0.0169
+          - 0.0161
+          - 0.0169
+          - 0.0161
+          - 0.0136
+          - 0.0145
+          - 0.0127
+          - 0.0169
+          - 0.0161
+          - 0.0169
+          - 0.0161
+          - 0.0136
+          - 0.0145
+          - 0.0127
+          - 0.0155
+          - 0.0155
+          - 0.0161
+          - 0.0169
+          - 0.0142
+          - 0.0159
+          - 0.014
+      collision_sphere_pairs: []
+      # Prefix match expands to all sphere frames whose name contains the prefix.
+      # Hand vs long arm bones (self-collision); thumb vs other digits (DG5F thumb
+      # hits palm/neighbors at large yaw — tesollo_env_validation.md §15).
+      collision_link_prefix_pairs:
+          [["left_link_", "ur5_upper_arm_link"],
+           ["left_link_", "ur5_forearm_link"],
+           ["palm_sphere", "ur5_upper_arm_link"],
+           ["palm_sphere", "ur5_forearm_link"],
+           ["left_link_base", "ur5_upper_arm_link"],
+           ["left_link_base", "ur5_forearm_link"],
+           ["left_link_1", "left_link_2"],
+           ["left_link_1", "left_link_3"],
+           ["left_link_1", "left_link_4"],
+           ["left_link_1", "left_link_5"],
+           ["left_link_1", "palm_sphere"],
+           ["left_link_1", "left_link_base"]]
+
+    cspace_damping:
+      gain: 10.
+
+    # Off for CP1; enable in CP3 (ADEPT: energy_target 1.0, damping 100).
+    speed_control:
+      active: False
+      energy_target: 1.0
+      damping: 100.
+
+    joint_limits:
+      active: True
+      # 6 arm (UR5) + 20 hand. Arm seeded from Kuka iiwa; fingers from Allegro.
+      acceleration: [7.5, 7.5, 10., 12.5, 15., 20.,
+                     22.5, 22.5, 22.5, 22.5,
+                     22.5, 22.5, 22.5, 22.5,
+                     22.5, 22.5, 22.5, 22.5,
+                     22.5, 22.5, 22.5, 22.5,
+                     22.5, 22.5, 22.5, 22.5]
+      # Arm jerk ≈ 500 * accel; finger jerk ≈ 100 * accel (Allegro convention).
+      jerk: [3750., 3750., 5000., 6250., 7500., 10000.,
+             2250., 2250., 2250., 2250.,
+             2250., 2250., 2250., 2250.,
+             2250., 2250., 2250., 2250.,
+             2250., 2250., 2250., 2250.,
+             2250., 2250., 2250., 2250.]

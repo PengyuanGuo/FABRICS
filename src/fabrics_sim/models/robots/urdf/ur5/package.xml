@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>ur5_description</name>
+  <version>0.1.0</version>
+  <description>Standalone UR5 URDF flattened from Universal_Robots_ROS2_Description (ur_type:=ur5)</description>
+  <maintainer email="anya.chanyoung.ahn@gmail.com">Chanyoung Ahn</maintainer>
+  <license>BSD-3-Clause</license>
+</package>

@@ -1,0 +1,2 @@
+{"ur5_base_link": ["ur5_upper_arm_link"], "ur5_upper_arm_link": ["ur5_base_link"],
+ "ur5_forearm_link": ["ur5_wrist_2_link"], "ur5_wrist_2_link": ["ur5_forearm_link"]}
