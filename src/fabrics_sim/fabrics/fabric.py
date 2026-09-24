@@ -18,7 +18,7 @@ from fabrics_sim.fabrics.model_batch_builder import create_model_batch
 from fabrics_sim.fabrics.taskmap_container import TaskmapContainer
 from fabrics_sim.utils.utils import jvp, jacobian
 from fabrics_sim.utils.path_utils import get_robot_urdf_path, get_params_path 
-from fabrics_sim.utils.math_utils import inverse_pd_matrix
+from fabrics_sim.utils.math_utils import inverse_pd_matrix, inverse_pd_matrix_torch
 
 import warp as wp
 import warp.sim
@@ -90,6 +90,23 @@ class AccelConstraint(torch.autograd.Function):
         # Return adjoint w.r.t. inputs
         #return (wp.torch.to_torch(ctx.tape.gradients[ctx.qdd]), None)
         return (wp.torch.to_torch(ctx.tape.gradients[ctx.qdd]), None)
+
+def pullback_metric(jac, M):
+    """J^T M J. M is bxmxm, or bxpxdxd for a block-diagonal leaf metric (m = p*d)."""
+    if M.dim() == 4:
+        batch, p, d, _ = M.shape
+        MJ = torch.matmul(M, jac.view(batch, p, d, -1)).view(batch, p * d, -1)
+        return torch.bmm(jac.transpose(1, 2), MJ)
+    return torch.bmm(torch.bmm(jac.transpose(1, 2), M), jac)
+
+
+def leaf_metric_mv(M, v):
+    """M v as a bxmx1 tensor, for a dense or block-diagonal (bxpxdxd) leaf metric."""
+    if M.dim() == 4:
+        batch, p, d, _ = M.shape
+        return torch.matmul(M, v.view(batch, p, d, 1)).view(batch, p * d, 1)
+    return torch.bmm(M, v.unsqueeze(2))
+
 
 class BaseFabric(torch.nn.Module):
     """
@@ -235,16 +252,19 @@ class BaseFabric(torch.nn.Module):
             else:
                 self.fabrics_features[taskmap_name][fabric_name] = None
 
-    def add_energy(self, taskmap_name, energy_name, energy):
+    def add_energy(self, taskmap_name, energy_name, energy, role='both'):
         """
         Adds an energy term to an existing taskmap container.
         -----------------------------
         @param taskmap_name: name for the task map
         @param energy_name: name for the energy term
         @param energy: energy term itself
+        @param role: 'both' (default), 'energize' (energization metric only) or 'speed'
+                     (speed-control energy only). Applies to all energies of the container.
         """
         # Find target taskmap container and add energy to this container.
         self.taskmap_containers[taskmap_name].add_energy(energy_name, energy)
+        self.taskmap_containers[taskmap_name].energy_role = role
 
     def eval_container(self, container, q, qd, fabric_features, external_force):
         """
@@ -269,6 +289,11 @@ class BaseFabric(torch.nn.Module):
         jac = None
         curvature_force = None
         xd = None
+        # Constant diagonal Jacobian (identity and joint-limit maps): the curvature term is zero
+        # and the pull-back only scales rows/columns, so skip the eps re-eval and dense bmm's.
+        if getattr(container.taskmap, 'jacobian_diagonal', None) is not None:
+            return self.eval_container_diagonal(container, q, qd, fabric_features, external_force)
+
         # If jacobian is None, then we will build jacobian via auto diff
         # and use double back to obtain taskmap velocity and curvature force.
         # It is assumed that the forward map is constructed purely from PyTorch.
@@ -319,7 +344,7 @@ class BaseFabric(torch.nn.Module):
         # does not yet currently support double derivatives.
         root_metric = None
         if M_leaf is not None:
-            root_metric = torch.bmm(torch.bmm(jac.transpose(1,2), M_leaf), jac)
+            root_metric = pullback_metric(jac, M_leaf)
 
         # Calculate root force in batch.
         # NOTE: placing force on the left side
@@ -332,10 +357,10 @@ class BaseFabric(torch.nn.Module):
             leaf_potential_force = potential_force.unsqueeze(2) # + torch.bmm(M_leaf, curvature_force.unsqueeze(2))
             root_potential_force = (torch.bmm(jac.transpose(1,2), leaf_potential_force)).squeeze(2)
             # Need to add the curvature force from the potential force space to the geometric force
-            leaf_curv_force = torch.bmm(M_leaf, curvature_force.unsqueeze(2))
+            leaf_curv_force = leaf_metric_mv(M_leaf, curvature_force)
             root_curv_force_from_potential = (torch.bmm(jac.transpose(1,2), leaf_curv_force)).squeeze(2)
         if geometric_force is not None:
-            leaf_geometric_force = geometric_force.unsqueeze(2) + torch.bmm(M_leaf, curvature_force.unsqueeze(2))
+            leaf_geometric_force = geometric_force.unsqueeze(2) + leaf_metric_mv(M_leaf, curvature_force)
             root_geometric_force = (torch.bmm(jac.transpose(1,2), leaf_geometric_force)).squeeze(2)
         # Need to add the curvature force from the potential force space to the geometric force
         if root_curv_force_from_potential is not None:
@@ -358,6 +383,29 @@ class BaseFabric(torch.nn.Module):
                     energy_force.unsqueeze(2) + torch.bmm(M_energy, curvature_force.unsqueeze(2))
             root_energy_force = (torch.bmm(jac.transpose(1,2), leaf_energy_force)).squeeze(2)
 
+        return (root_metric, root_geometric_force, root_potential_force,
+                root_energy_metric, root_energy_force, energy)
+
+    def eval_container_diagonal(self, container, q, qd, fabric_features, external_force):
+        """
+        eval_container for a taskmap whose Jacobian is the constant diag(d); same returns.
+        """
+        x, jac = container.eval_taskmap(q)
+        d = container.taskmap.jacobian_diagonal
+        xd = qd * d
+        M_leaf, potential_force, geometric_force = \
+                container.eval_fabrics(x, xd, fabric_features, external_force)
+        root_metric = d.unsqueeze(-1) * M_leaf * d.unsqueeze(-2)
+        root_potential_force = d * potential_force
+        root_geometric_force = d * geometric_force
+        M_energy, energy_force, energy = container.eval_energies(x, xd)
+        root_energy_metric = None
+        root_energy_force = None
+        if len(container._energies) > 0:
+            root_energy_metric = d.unsqueeze(-1) * M_energy * d.unsqueeze(-2)
+            root_energy_force = d * energy_force
+        else:
+            energy = None
         return (root_metric, root_geometric_force, root_potential_force,
                 root_energy_metric, root_energy_force, energy)
 
@@ -434,6 +482,11 @@ class BaseFabric(torch.nn.Module):
                     self.root_potential_forces.add_(root_potential_force)
                 else:
                     self.root_potential_forces = self.root_potential_forces + root_potential_force
+            energy_role = getattr(container, 'energy_role', 'both')
+            if energy_role == 'speed':
+                root_energy_metric = root_energy_force = None
+            elif energy_role == 'energize':
+                energy = None
             if root_energy_metric is not None:
                 #root_energy_metrics.append(root_energy_metric)
                 if self.graph_capturable:
@@ -483,7 +536,11 @@ class BaseFabric(torch.nn.Module):
         # Calculate inverse of mass once and use in several places.
         # TODO: need to toggle choose between these two based on whether graph capture is set
         if self.graph_capturable:
-            inverse_pd_matrix(metric, self.metric_inv, self.L, self.L_inv, self.device)
+            # 'warp' keeps the upstream InverseCholesky kernels (slow); default is torch.
+            if self.fabric_params.get('metric_inverse', 'torch') == 'warp':
+                inverse_pd_matrix(metric, self.metric_inv, self.L, self.L_inv, self.device)
+            else:
+                inverse_pd_matrix_torch(metric, self.metric_inv, self.eye)
         else:
             self.metric_inv = torch.inverse(metric)
         #metric_inv = torch.zeros_like(metric)
@@ -710,4 +767,6 @@ class BaseFabric(torch.nn.Module):
         self.metric_inv = torch.zeros(self.batch_size, self._num_joints, self._num_joints, device=self.device)
         self.L = torch.zeros(self.batch_size, self._num_joints, self._num_joints, device=self.device)
         self.L_inv = torch.zeros(self.batch_size, self._num_joints, self._num_joints, device=self.device)
+        self.eye = torch.eye(self._num_joints, device=self.device).expand(
+            self.batch_size, self._num_joints, self._num_joints).contiguous()
 

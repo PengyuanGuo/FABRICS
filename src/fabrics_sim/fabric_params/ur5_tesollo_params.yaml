@@ -23,7 +23,10 @@ fabric_params:
         conical_gain: 1.
 
     # Variant A: HD1 forcing attractor on full C-space (policy q* target).
-    # Gains seeded from Kuka hand_attractor / ADEPT B.2 structure.
+    # Gains seeded from Kuka hand_attractor / ADEPT B.2 structure. Phase 1b: the delta
+    # policy keeps |q* - q_f| ~ 0.1 * sqrt(#moving joints) ~ 0.25 rad, so damping_radius 0.2
+    # (sharpness 10) left the damping half on during every move (cruise ~0.8 rad/s, 3 s reach
+    # 88 % even without self pairs). 0.1 / 20: damping engages only near the goal.
     forcing_cspace_attractor:
         min_isotropic_mass: 8.
         max_isotropic_mass: 8.
@@ -32,18 +35,35 @@ fabric_params:
         conical_sharpness: 40.
         conical_gain: 50.
         damping: 50.
-        damping_sharpness: 10.
-        damping_radius: 0.2
+        damping_sharpness: 20.
+        damping_radius: 0.1
 
+    # type adept: ADEPT App. B.4 barrier (JointLimitBarrier) on range-normalised clearance
+    #   x = (q_upper - q) / range; offsets are fractions of range, metric_scalar is the same in
+    #   rad (root metric = k_b / (d - offset * range)^2), max_metric is per unit range^2
+    #   (4e5 -> ~1e4 at the arm limits, range 2 pi), soft_relu_gain in range/s^2, damping_gain
+    #   1/s. Tanh velocity gate with gate_offset < 0: off at rest, so targets at a limit are
+    #   reachable (gate 0.5 at rest held fingers ~0.1 rad off their limits). hold_*: position
+    #   floor on the gate (our addition), fully on within the last 0.2 % of range, so slow
+    #   pushes cannot creep past a limit. Zero q_f overshoot in all Phase 1b sets.
+    # type kuka: upstream JointLimitRepulsion in rad (bang-bang gate). Old values:
+    #   metric_scalar 0.02, metric_exploder_offset 0.1, max_metric 100, soft_relu_gain 8,
+    #   damping_gain 8 (q_f overshoot up to 0.49 rad with self pairs on).
     joint_limit_repulsion:
+        type: adept
+        metric_scalar: 0.3
+        metric_exploder_offset: 0.
+        max_metric: 400000.
+        soft_relu_gain: 2.
+        damping_gain: 60.
+        gate_sharpness: 30.
+        gate_offset: -0.05
+        hold_offset: 0.002
+        hold_sharpness: 2000.
+        # kuka only
         velocity_gate: True
         breakaway_distance: 0.0
         breakaway_velocity: 0.
-        soft_relu_gain: 8.
-        metric_scalar: 0.02
-        metric_exploder_offset: 0.1
-        max_metric: 100.
-        damping_gain: 8.
 
     # Kept for Variant B (palm + PCA / raw hand). Unused by Variant A construct_fabric.
     hand_attractor:
@@ -67,10 +87,18 @@ fabric_params:
         damping_sharpness: 10.
         damping_radius: 0.2
 
+    # Phase 1b: the repulsion must beat the delta-policy pull (target kept 0.1 rad beyond q_f,
+    # forcing mass 8): forcing_metric_scalar 0.01 -> 0.3, constant_accel 1 -> 3, damping_gain
+    # 0 -> 20. The constant push biases goals near an obstacle, so sphere pairs engage only
+    # within self_engage_depth 3 cm; the table (world) keeps engage_depth 0.5.
+    # metric_normalization: body = upstream Frobenius norm over the whole body metric;
+    # sphere = per-sphere blocks (ADEPT B.3), tested and worse here.
     body_repulsion:
       max_depth: 2.
       min_depth: 0.01
       engage_depth: 0.5
+      self_engage_depth: 0.03
+      metric_normalization: body
       breakaway_depth: 0.0
       breakaway_velocity: 0.
       metric_scalar: 1.
@@ -78,11 +106,11 @@ fabric_params:
       velocity_gate_sharpness: 1000.
       velocity_gate_offset: 0.002
       rescaled_min_dist: .01
-      forcing_metric_scalar: .01
+      forcing_metric_scalar: .3
       geom_metric_scalar: .01
-      constant_accel: 1.
+      constant_accel: 3.
       constant_accel_geom: 5.
-      damping_gain: 0.
+      damping_gain: 20.
       # 53 spheres: 12 arm, 6 palm, 35 finger (3 per distal link incl. tip); build_fabric_urdf.py --params syncs these.
       collision_sphere_frames:
           - ur5_shoulder_link_sphere1
@@ -138,19 +166,21 @@ fabric_params:
           - left_link_5_4_sphere1
           - left_link_5_4_sphere2
           - left_link_5_4_sphere3
-      # Metres. Arm: hand-tuned (ARM_RADII in build_fabric_urdf.py). Hand: clipped-mesh fit + 1 mm.
+      # Metres. Arm: p99 cover of each link's visual mesh by its own spheres (ARM_RADII in
+      # build_fabric_urdf.py; the old hand-tuned radii left 47-67 % of the upper arm / forearm
+      # mesh outside, the cause of hand-arm mesh contact). Hand: clipped-mesh fit + 1 mm.
       collision_sphere_radii:
           - 0.105
-          - 0.06
-          - 0.06
-          - 0.06
+          - 0.088
+          - 0.088
+          - 0.088
           - 0.09
-          - 0.045
-          - 0.04
-          - 0.04
-          - 0.06
-          - 0.055
-          - 0.06
+          - 0.074
+          - 0.073
+          - 0.074
+          - 0.077
+          - 0.065
+          - 0.065
           - 0.05
           - 0.032
           - 0.0316
@@ -195,34 +225,36 @@ fabric_params:
           - 0.014
       collision_sphere_pairs: []
       # Prefix match expands to all sphere frames whose name contains the prefix.
-      # Hand vs long arm bones (self-collision); thumb vs other digits (DG5F thumb
-      # hits palm/neighbors at large yaw — tesollo_env_validation.md §15).
-      # Thumb vs palm skips left_link_1_2: its spheres overlap the palm spheres in
-      # every posture (adjacent links), which kept collision_status on permanently.
+      # Hand vs long arm bones only. Thumb-finger / thumb-palm pairs were dropped in Phase 1b:
+      # they neither prevented thumb-index pass-through nor mattered for pinch reach
+      # (fabric_self_collision_checks.py --check hand), cost 238 pairs, and PhysX already
+      # resolves finger-finger contact.
       collision_link_prefix_pairs:
           [["left_link_", "ur5_upper_arm_link"],
            ["left_link_", "ur5_forearm_link"],
            ["palm_sphere", "ur5_upper_arm_link"],
            ["palm_sphere", "ur5_forearm_link"],
            ["left_link_base", "ur5_upper_arm_link"],
-           ["left_link_base", "ur5_forearm_link"],
-           ["left_link_1", "left_link_2"],
-           ["left_link_1", "left_link_3"],
-           ["left_link_1", "left_link_4"],
-           ["left_link_1", "left_link_5"],
-           ["left_link_1_3", "palm_sphere"],
-           ["left_link_1_4", "palm_sphere"],
-           ["left_link_1_3", "left_link_base"],
-           ["left_link_1_4", "left_link_base"]]
+           ["left_link_base", "ur5_forearm_link"]]
 
     cspace_damping:
       gain: 10.
 
-    # Off for CP1; enable in CP3 (ADEPT: energy_target 1.0, damping 100).
+    # ADEPT App. B.5: extra damping b_sc M qd while E > E*. energy: arm_palm measures E as
+    # 0.5 * 0.75 |qd_arm|^2 + 0.5 * 0.25 |v_palm|^2 (hand excluded); cspace = all joints.
+    # Energization always uses the all-joint energy (arm/palm energization is singular when
+    # the arm stops and the fingers move). E* and damping are ADR knobs in ADEPT.
     speed_control:
-      active: False
+      active: True
+      energy: arm_palm
+      arm_energy_scale: 0.75
+      palm_energy_scale: 0.25
+      palm_frame: palm_sphere
       energy_target: 1.0
       damping: 100.
+
+    # Metric inverse: torch (batched cuSOLVER Cholesky, graph capturable) or warp (upstream).
+    metric_inverse: torch
 
     joint_limits:
       active: True

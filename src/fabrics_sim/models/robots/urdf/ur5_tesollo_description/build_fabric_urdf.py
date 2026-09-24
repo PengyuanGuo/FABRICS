@@ -82,20 +82,22 @@ SPHERE_FRAMES: list[tuple[str, str, tuple[float, float, float]]] = [
     ("ur5_wrist_3_link", "ur5_wrist_3_link_sphere1", (0.0, -0.00275, -0.017225)),
     *_fitted_frames(_HAND_SPHERES),
 ]
-# Arm radii are hand-tuned in Isaac Sim (not mesh-enclosing): thin tube
-# middles, larger joint housings. The fitted JSON supplies only their centers.
+# Arm radii: p99 cover of each link's visual mesh by that link's spheres (nearest-center
+# assignment, default posture). The earlier hand-tuned radii (thin tube middles) left
+# 47-67 % of the upper arm / forearm mesh outside every sphere, which let the hand touch the
+# arm mesh while the fabric saw clearance. The fitted JSON supplies only their centers.
 ARM_RADII = {
     "ur5_shoulder_link_sphere1": 0.105,
-    "ur5_upper_arm_link_sphere1": 0.06,
-    "ur5_upper_arm_link_sphere2": 0.06,
-    "ur5_upper_arm_link_sphere3": 0.06,
+    "ur5_upper_arm_link_sphere1": 0.088,
+    "ur5_upper_arm_link_sphere2": 0.088,
+    "ur5_upper_arm_link_sphere3": 0.088,
     "ur5_upper_arm_link_sphere4": 0.09,
-    "ur5_forearm_link_sphere1": 0.045,
-    "ur5_forearm_link_sphere2": 0.04,
-    "ur5_forearm_link_sphere3": 0.04,
-    "ur5_forearm_link_sphere4": 0.06,
-    "ur5_wrist_1_link_sphere1": 0.055,
-    "ur5_wrist_2_link_sphere1": 0.06,
+    "ur5_forearm_link_sphere1": 0.074,
+    "ur5_forearm_link_sphere2": 0.073,
+    "ur5_forearm_link_sphere3": 0.074,
+    "ur5_forearm_link_sphere4": 0.077,
+    "ur5_wrist_1_link_sphere1": 0.065,
+    "ur5_wrist_2_link_sphere1": 0.065,
     "ur5_wrist_3_link_sphere1": 0.05,
 }
 _HAND_RADII = {s["frame"]: s["radius"] for s in _HAND_SPHERES}

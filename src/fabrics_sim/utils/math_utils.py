@@ -122,3 +122,13 @@ def inverse_pd_matrix(A, A_inv, L, L_inv, device):
 
     A_inv.copy_(torch.bmm(L_inv.transpose(1,2), L_inv))
 
+
+def inverse_pd_matrix_torch(A, A_inv, eye):
+    """Batched SPD inverse via cuSOLVER Cholesky + triangular solve; CUDA-graph capturable.
+
+    Much faster than InverseCholesky, whose kernels are launched over (batch, dim, dim)
+    threads that each redo the whole factorisation. `eye` is a preallocated bxnxn identity.
+    """
+    L, _ = torch.linalg.cholesky_ex(A)
+    L_inv = torch.linalg.solve_triangular(L, eye, upper=False)
+    A_inv.copy_(torch.bmm(L_inv.transpose(1, 2), L_inv))

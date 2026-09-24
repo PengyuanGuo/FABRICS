@@ -44,6 +44,7 @@ class IdentityMap(BaseMap):
             single_jacobian = torch.eye(dim, dim, device=self.device)
             single_jacobian = single_jacobian.reshape((1, dim, dim))
             self.jacobian = single_jacobian.repeat(q.shape[0], 1, 1)
+            self.jacobian_diagonal = torch.ones(dim, device=self.device)
 
         # Incoming position is immediately mapped to output position because this map
         # is the identity.

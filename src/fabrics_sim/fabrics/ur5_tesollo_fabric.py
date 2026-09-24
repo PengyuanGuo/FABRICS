@@ -22,7 +22,10 @@ from fabrics_sim.fabric_terms.body_sphere_3d_repulsion import (
     BaseFabricRepulsion,
     BodySphereRepulsion,
 )
-from fabrics_sim.fabric_terms.joint_limit_repulsion import JointLimitRepulsion
+from fabrics_sim.fabric_terms.joint_limit_repulsion import (
+    JointLimitBarrier,
+    JointLimitRepulsion,
+)
 from fabrics_sim.fabrics.fabric import BaseFabric
 from fabrics_sim.taskmaps.identity import IdentityMap
 from fabrics_sim.taskmaps.lower_joint_limit import LowerJointLimitMap
@@ -126,6 +129,8 @@ class Ur5TesolloFabric(BaseFabric):
     # ------------------------------------------------------------------
 
     def add_joint_limit_repulsion(self) -> None:
+        """Joint-limit term per side. ``joint_limit_repulsion.type``: ``adept`` = App. B.4
+        barrier on range-normalised clearance (tanh gate); ``kuka`` = upstream term in rad."""
         joints = self.urdfpy_robot.joints
         upper_joint_limits = [
             j.limit.upper for j in joints if j.joint_type == "revolute"
@@ -133,34 +138,26 @@ class Ur5TesolloFabric(BaseFabric):
         lower_joint_limits = [
             j.limit.lower for j in joints if j.joint_type == "revolute"
         ]
+        params = self.fabric_params["joint_limit_repulsion"]
+        if params.get("type", "kuka") == "adept":
+            joint_range = [u - l for u, l in zip(upper_joint_limits, lower_joint_limits)]
+            term_cls = JointLimitBarrier
+        else:
+            joint_range = None
+            term_cls = JointLimitRepulsion
 
-        taskmap_name = "upper_joint_limit"
-        taskmap = UpperJointLimitMap(upper_joint_limits, self.batch_size, self.device)
-        self.add_taskmap(taskmap_name, taskmap, graph_capturable=self.graph_capturable)
-        self.add_fabric(
-            taskmap_name,
-            "joint_limit_repulsion",
-            JointLimitRepulsion(
-                True,
-                self.fabric_params["joint_limit_repulsion"],
-                self.device,
-                graph_capturable=self.graph_capturable,
-            ),
-        )
-
-        taskmap_name = "lower_joint_limit"
-        taskmap = LowerJointLimitMap(lower_joint_limits, self.batch_size, self.device)
-        self.add_taskmap(taskmap_name, taskmap, graph_capturable=self.graph_capturable)
-        self.add_fabric(
-            taskmap_name,
-            "joint_limit_repulsion",
-            JointLimitRepulsion(
-                True,
-                self.fabric_params["joint_limit_repulsion"],
-                self.device,
-                graph_capturable=self.graph_capturable,
-            ),
-        )
+        for taskmap_name, taskmap in (
+            ("upper_joint_limit", UpperJointLimitMap(
+                upper_joint_limits, self.batch_size, self.device, joint_range)),
+            ("lower_joint_limit", LowerJointLimitMap(
+                lower_joint_limits, self.batch_size, self.device, joint_range)),
+        ):
+            self.add_taskmap(taskmap_name, taskmap, graph_capturable=self.graph_capturable)
+            self.add_fabric(
+                taskmap_name,
+                "joint_limit_repulsion",
+                term_cls(True, params, self.device, graph_capturable=self.graph_capturable),
+            )
 
     def add_cspace_attractor(self, is_forcing: bool) -> None:
         taskmap_name = "identity"
@@ -316,10 +313,45 @@ class Ur5TesolloFabric(BaseFabric):
         )
 
     def add_cspace_energy(self) -> None:
+        """Energization always uses the Euclidean energy on all 26 joints (upstream).
+        ``speed_control.energy``: ``cspace`` = speed control also measures that energy;
+        ``arm_palm`` = ADEPT App. B.5, speed control measures an arm-joint slice (beta
+        ``arm_energy_scale``) + palm-frame origin (beta ``palm_energy_scale``), hand excluded.
+        ADEPT also energizes with the arm/palm energy; here that made alpha singular whenever
+        the arm stops while the fingers move (thumb run away to 8 rad/s), so it is not used."""
+        sc = self.fabric_params["speed_control"]
+        arm_palm = sc.get("energy", "cspace") == "arm_palm"
         self.add_energy(
             "identity",
             "euclidean",
             EuclideanEnergy(self.batch_size, self._num_joints, self.device),
+            role="energize" if arm_palm else "both",
+        )
+        if not arm_palm:
+            return
+        self.add_taskmap(
+            "arm_joints",
+            SliceMap(list(range(self.num_arm)), self.device),
+            graph_capturable=self.graph_capturable,
+        )
+        self.add_energy(
+            "arm_joints",
+            "euclidean",
+            EuclideanEnergy(self.batch_size, self.num_arm, self.device, sc["arm_energy_scale"]),
+            role="speed",
+        )
+        self.add_taskmap(
+            "palm_origin",
+            RobotFrameOriginsTaskMap(
+                self.urdf_path, [sc["palm_frame"]], self.batch_size, self.device
+            ),
+            graph_capturable=self.graph_capturable,
+        )
+        self.add_energy(
+            "palm_origin",
+            "euclidean",
+            EuclideanEnergy(self.batch_size, 3, self.device, sc["palm_energy_scale"]),
+            role="speed",
         )
 
     def construct_fabric(self) -> None:

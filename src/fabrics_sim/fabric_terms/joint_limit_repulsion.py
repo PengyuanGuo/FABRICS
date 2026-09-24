@@ -105,3 +105,65 @@ class JointLimitRepulsion(BaseFabricTerm):
         else:
             self.force = -torch.bmm(self.metric, xdd.unsqueeze(2)).squeeze(2)
 
+
+
+class JointLimitBarrier(BaseFabricTerm):
+    """
+    Joint-limit barrier of ADEPT (arXiv 2608.19182) App. B.4, eqs. (19)-(22). Meant for the
+    range-normalised clearance taskmaps x = (q_upper - q) / range, (q - q_lower) / range, so
+    offsets are fractions of the joint range. Differences to JointLimitRepulsion: the
+    bang-bang velocity gate is replaced by g = 0.5 (tanh(-gate_sharpness (xd - gate_offset)) + 1)
+    on both metric and repulsion, and the metric stays diagonal (no dense bmm).
+
+        M = diag(g k_b / max(x - delta_J, eps)^2),  eps = sqrt(k_b / max_metric)
+        forcing:   xdd = g k_r - b_J 1{xd < 0} xd
+        geometric: xdd = |xd|^2 k_r g
+
+    Params: metric_scalar (k_b), metric_exploder_offset (delta_J), max_metric, soft_relu_gain
+    (k_r), damping_gain (b_J), gate_sharpness (sigma_g), gate_offset (delta_g).
+
+    Optional position floor on the gate (not in ADEPT): g = max(g, 0.5 (tanh(-hold_sharpness
+    (x - hold_offset)) + 1)). With gate_offset < 0 the barrier is off at rest, so targets at
+    the limit are reachable, and the floor still turns it fully on within the last
+    hold_offset of the range when a slow push (e.g. body repulsion) creeps toward the limit.
+    """
+    def __init__(self, is_forcing_policy, params, device, graph_capturable):
+        super().__init__(is_forcing_policy, params, device, graph_capturable=graph_capturable)
+        self._eps = (self.params['metric_scalar'] / self.params['max_metric']) ** 0.5
+        self._gate = None
+
+    def metric_eval(self, x, xd, features):
+        if self.metric is None:
+            self.metric = torch.zeros(x.shape[0], x.shape[1], x.shape[1], requires_grad=False,
+                                      device=self.device)
+            self.force = torch.zeros(x.shape[0], x.shape[1], requires_grad=False,
+                                     device=self.device)
+            self._gate = torch.zeros_like(x)
+            self._metric_diag = torch.zeros_like(x)
+
+        gate = 0.5 * (torch.tanh(-self.params['gate_sharpness'] *
+                                 (xd - self.params['gate_offset'])) + 1.)
+        if 'hold_offset' in self.params:
+            gate = torch.maximum(gate, 0.5 * (torch.tanh(-self.params['hold_sharpness'] *
+                                 (x - self.params['hold_offset'])) + 1.))
+        x_delta = torch.clamp(x - self.params['metric_exploder_offset'], min=self._eps)
+        metric_diag = gate * self.params['metric_scalar'] / x_delta ** 2
+        if self.graph_capturable:
+            self._gate.copy_(gate)
+            self._metric_diag.copy_(metric_diag)
+            self.metric.copy_(torch.diag_embed(metric_diag))
+        else:
+            self._gate = gate
+            self._metric_diag = metric_diag
+            self.metric = torch.diag_embed(metric_diag)
+
+    def force_eval(self, x, xd, features):
+        if self.is_forcing_policy:
+            xdd = self.params['soft_relu_gain'] * self._gate -\
+                  (xd < 0) * self.params['damping_gain'] * xd
+        else:
+            xdd = torch.sum(xd * xd, dim=1, keepdim=True) * self.params['soft_relu_gain'] * self._gate
+        if self.graph_capturable:
+            self.force.copy_(-self._metric_diag * xdd)
+        else:
+            self.force = -self._metric_diag * xdd

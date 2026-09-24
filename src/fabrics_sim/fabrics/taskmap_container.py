@@ -88,7 +88,14 @@ class TaskmapContainer():
         if self.M_leaf is None:
             batch_size = x.shape[0]
             num_dim = x.shape[1]
-            self.M_leaf = torch.zeros(batch_size, num_dim, num_dim, device=x.device)
+            # Leaf metric takes the shape of the first term's metric: bxmxm, or bxpxdxd for
+            # a block-diagonal metric (body spheres). All terms in a container must agree.
+            if len(self._fabrics) == 0:
+                self.M_leaf = torch.zeros(batch_size, num_dim, num_dim, device=x.device)
+            else:
+                first_name, first_fabric = next(iter(self._fabrics.items()))
+                M_first, _ = first_fabric(x, xd, fabric_features_dict[first_name])
+                self.M_leaf = torch.zeros_like(M_first)
             self.potential_force_lhs_leaf = torch.zeros(batch_size, num_dim, device=x.device)
             self.geometric_force_lhs_leaf = torch.zeros(batch_size, num_dim, device=x.device)
 

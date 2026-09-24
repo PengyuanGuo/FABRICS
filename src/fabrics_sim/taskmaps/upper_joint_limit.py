@@ -16,11 +16,13 @@ import torch
 from fabrics_sim.taskmaps.maps_base import BaseMap
 
 class UpperJointLimitMap(BaseMap):
-    def __init__(self, upper_joint_limits, batch_size, device):
+    def __init__(self, upper_joint_limits, batch_size, device, joint_range=None):
         """
         Initializes the upper joint limit task map.
         -----------------------------
         :param upper_joint_limits: a list of joint limits
+        :param joint_range: optional list of (upper - lower) per joint. If given, the
+                            clearance is normalised by it (ADEPT App. B.4), x in [0, 1].
         :param batch_size: int, size of batch
         :param device: type str that sets the cuda device for the fabric
         """
@@ -29,6 +31,7 @@ class UpperJointLimitMap(BaseMap):
         self.upper_joint_limits = upper_joint_limits
         self.upper_joint_limits_batch = None
         self.batch_size = batch_size
+        self.joint_range = joint_range
 
         self.init_limits()
 
@@ -45,9 +48,13 @@ class UpperJointLimitMap(BaseMap):
                 dim = num_joints
                 single_jacobian = -torch.eye(dim, dim, device=self.device)
                 single_jacobian = single_jacobian.reshape((1, dim, dim))
+                self.jacobian_diagonal = -torch.ones(dim, device=self.device)
+                if self.joint_range is not None:
+                    self.jacobian_diagonal /= torch.tensor(self.joint_range, device=self.device)
+                    single_jacobian = torch.diag(self.jacobian_diagonal).reshape((1, dim, dim))
                 self.jacobian = single_jacobian.repeat(self.batch_size, 1, 1)
 
     def forward_position(self, q, features):
-        x = self.upper_joint_limits_batch - q
+        x = (q - self.upper_joint_limits_batch) * self.jacobian_diagonal
 
         return (x, self.jacobian)

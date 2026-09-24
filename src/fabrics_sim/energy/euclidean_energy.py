@@ -16,7 +16,7 @@ class EuclideanEnergy(Energy):
     """
     Implements Euclidean energy.
     """
-    def __init__(self, batch_size, num_joints, device):
+    def __init__(self, batch_size, num_joints, device, scale=1.):
         """
         Constructor that allocates for energy, metric, and xdd
         so that it can be calculated once and recalled subsequently.
@@ -28,6 +28,8 @@ class EuclideanEnergy(Energy):
         self.force = None
         self.batch_size = batch_size
         self.num_joints = num_joints
+        # Energy L = 1/2 scale xd' xd (ADEPT App. B.5 weights, beta).
+        self.scale = scale
 
         self.init_energy()
 
@@ -38,7 +40,7 @@ class EuclideanEnergy(Energy):
         # incoming state.
         if self.init is False or self.metric.shape[0] != x.shape[0]:
             #metric_collapsed = torch.ones_like(x)
-            metric_collapsed = torch.ones(self.batch_size, self.num_joints, device=self.device)
+            metric_collapsed = self.scale * torch.ones(self.batch_size, self.num_joints, device=self.device)
             self.metric = torch.diag_embed(metric_collapsed)
 
             # Since mass is constant, there is no curvature force from Euler-Lagrange
@@ -59,6 +61,6 @@ class EuclideanEnergy(Energy):
         """
 
         # Calculate energy. The energy is L = 1/2 xd' I xd
-        energy = 0.5 * torch.sum(xd*xd, dim=1).unsqueeze(1)
+        energy = 0.5 * self.scale * torch.sum(xd*xd, dim=1).unsqueeze(1)
 
         return (self.metric, self.force, energy)

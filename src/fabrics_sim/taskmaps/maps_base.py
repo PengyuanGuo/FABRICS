@@ -23,6 +23,9 @@ class BaseMap(torch.nn.Module):
         """
         super().__init__()
         self.device = device
+        # Set by maps whose Jacobian is a constant diagonal matrix, diag(jacobian_diagonal)
+        # (n or bxn tensor). BaseFabric then skips the dense pull-back and curvature terms.
+        self.jacobian_diagonal = None
 
     @abstractmethod
     def forward_position(self, q, features):
