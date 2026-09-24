@@ -197,6 +197,8 @@ fabric_params:
       # Prefix match expands to all sphere frames whose name contains the prefix.
       # Hand vs long arm bones (self-collision); thumb vs other digits (DG5F thumb
       # hits palm/neighbors at large yaw — tesollo_env_validation.md §15).
+      # Thumb vs palm skips left_link_1_2: its spheres overlap the palm spheres in
+      # every posture (adjacent links), which kept collision_status on permanently.
       collision_link_prefix_pairs:
           [["left_link_", "ur5_upper_arm_link"],
            ["left_link_", "ur5_forearm_link"],
@@ -208,8 +210,10 @@ fabric_params:
            ["left_link_1", "left_link_3"],
            ["left_link_1", "left_link_4"],
            ["left_link_1", "left_link_5"],
-           ["left_link_1", "palm_sphere"],
-           ["left_link_1", "left_link_base"]]
+           ["left_link_1_3", "palm_sphere"],
+           ["left_link_1_4", "palm_sphere"],
+           ["left_link_1_3", "left_link_base"],
+           ["left_link_1_4", "left_link_base"]]
 
     cspace_damping:
       gain: 10.

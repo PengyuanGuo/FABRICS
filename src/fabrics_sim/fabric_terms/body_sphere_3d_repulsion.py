@@ -41,9 +41,11 @@ def collision_response(
 
     batch_index, point_index, mesh_index, second_point_index = wp.tid()
 
-    # Early out if env mesh does not exist 
-    if object_indicator[batch_index, mesh_index] == 0:
-        return
+    # Only the mesh query needs a mesh in this slot. The sphere-pair check below
+    # must not depend on it: upstream returned here, so an env with no world mesh
+    # got no self-collision response at all, and an env with N meshes counted
+    # every pair N times. Pairs are now evaluated once, in the mesh_index == 0 lane.
+    has_mesh = object_indicator[batch_index, mesh_index] != wp.uint64(0)
 
     # Now query closest distance between mesh object using this center face point and normal.
     d = float(0.0)              # hit distance along ray
@@ -59,7 +61,7 @@ def collision_response(
     # If we haven't already queried the distance between the current body point and mesh, then do so
     # Checked if == 1
     # Not checked if == 0
-    if sphere_mesh_checked[batch_index, point_index, mesh_index] == 0:
+    if has_mesh and sphere_mesh_checked[batch_index, point_index, mesh_index] == 0:
         # Immediately indicate that it's been checked
         wp.atomic_add(sphere_mesh_checked, batch_index, point_index, mesh_index, 1)
 
@@ -125,7 +127,7 @@ def collision_response(
 
     # Now check for body sphere collisions
     # Check the collision matrix. If value == 1, then calculate distance and collision response
-    if sphere_collision_matrix[point_index, second_point_index] == 1:
+    if mesh_index == 0 and sphere_collision_matrix[point_index, second_point_index] == 1:
         # Create a vector pointing from the current body point to another body point
         point1_to_point2 = robot_body_points[batch_index, second_point_index] -\
                            robot_body_points[batch_index, point_index]
