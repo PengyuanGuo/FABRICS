@@ -181,6 +181,27 @@ class Ur5TesolloFabric(BaseFabric):
             ),
         )
 
+    def add_forcing_attractors(self) -> None:
+        """ADEPT App. B.2 forcing cspace attractor(s) carrying the policy target q*.
+
+        ``forcing_partition: true`` splits q* = [q*_arm, q*_hand] into two attractors on joint
+        slices (``forcing_arm_attractor`` / ``forcing_hand_attractor`` yaml blocks, defaulting to
+        ``forcing_cspace_attractor``). Each has its own error norm, so a large finger error does
+        not use up the arm's conical pull, and each damping radius engages on its own group.
+        ``false`` keeps the single 26-D attractor on ``identity``."""
+        if not self.fabric_params.get("forcing_partition", False):
+            self.add_cspace_attractor(True)
+            return
+        groups = (("forcing_arm", list(range(self.num_arm)), "forcing_arm_attractor"),
+                  ("forcing_hand", list(range(self.num_arm, self.num_arm + self.num_hand)),
+                   "forcing_hand_attractor"))
+        for taskmap_name, indices, block in groups:
+            params = self.fabric_params.get(block, self.fabric_params["forcing_cspace_attractor"])
+            self.add_taskmap(taskmap_name, SliceMap(indices, self.device),
+                             graph_capturable=self.graph_capturable)
+            self.add_fabric(taskmap_name, block,
+                            Attractor(True, params, self.device, graph_capturable=self.graph_capturable))
+
     def add_hand_joint_attractor(self) -> None:
         """Forcing attractor on the 20 hand joints (Variant B raw hand)."""
         hand_indices = list(range(self.num_arm, self.num_arm + self.num_hand))
@@ -362,7 +383,7 @@ class Ur5TesolloFabric(BaseFabric):
         self.add_cspace_energy()
 
         if self.mode == "cspace":
-            self.add_cspace_attractor(True)
+            self.add_forcing_attractors()
         else:
             # Variant B: needs palm_* frames in the fabric URDF (not present yet).
             raise NotImplementedError(
@@ -471,7 +492,7 @@ class Ur5TesolloFabric(BaseFabric):
         Cspace (Variant A)::
 
             set_features(q_target, q_f, qd_f, object_ids, object_indicator,
-                         cspace_damping_gain=None)
+                         cspace_damping_gain=None, speed_energy_target=None)
 
         Pose (Variant B, once palm frames exist)::
 
@@ -491,17 +512,28 @@ class Ur5TesolloFabric(BaseFabric):
         object_ids,
         object_indicator,
         cspace_damping_gain=None,
+        speed_energy_target=None,
     ) -> None:
-        """Variant A: ``q_target`` is bx26 C-space target for the forcing attractor."""
+        """Variant A: ``q_target`` is bx26 C-space target for the forcing attractor(s).
+
+        ``cspace_damping_gain`` / ``speed_energy_target``: optional per-env (N, 1) tensors
+        (ADR-annealed, ADEPT App. B.8). They are the captured graph inputs, so writing them in
+        place changes the fabric without a re-capture."""
         assert q_target.shape == (self.batch_size, NUM_JOINTS), (
             f"q_target shape {tuple(q_target.shape)} != "
             f"({self.batch_size}, {NUM_JOINTS})"
         )
-        self.fabrics_features["identity"]["forcing_cspace_attractor"] = q_target
+        if self.fabric_params.get("forcing_partition", False):
+            self.fabrics_features["forcing_arm"]["forcing_arm_attractor"] = q_target[:, : self.num_arm]
+            self.fabrics_features["forcing_hand"]["forcing_hand_attractor"] = q_target[:, self.num_arm :]
+        else:
+            self.fabrics_features["identity"]["forcing_cspace_attractor"] = q_target
         self.fabrics_features["identity"]["cspace_attractor"] = self.default_config
         self._update_body_repulsion(q_f, qd_f, object_ids, object_indicator)
         if cspace_damping_gain is not None:
             self.fabric_params["cspace_damping"]["gain"] = cspace_damping_gain
+        if speed_energy_target is not None:
+            self.fabric_params["speed_control"]["energy_target"] = speed_energy_target
 
     def set_features_pose(
         self,

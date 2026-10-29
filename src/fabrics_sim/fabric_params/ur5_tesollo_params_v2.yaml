@@ -43,6 +43,31 @@ fabric_params:
         damping_sharpness: 20.
         damping_radius: 0.1
 
+    # ADEPT App. B.2: q* = [q*_arm, q*_hand] on two attractors (own error norm and damping radius
+    # per group), so finger error does not throttle the arm and vice versa. Same gains as the
+    # single attractor above, which is used when forcing_partition is false.
+    forcing_partition: true
+    forcing_arm_attractor:
+        min_isotropic_mass: 8.
+        max_isotropic_mass: 8.
+        mass_sharpness: 20.
+        mass_switch_offset: 0.5
+        conical_sharpness: 40.
+        conical_gain: 50.
+        damping: 50.
+        damping_sharpness: 20.
+        damping_radius: 0.1
+    forcing_hand_attractor:
+        min_isotropic_mass: 8.
+        max_isotropic_mass: 8.
+        mass_sharpness: 20.
+        mass_switch_offset: 0.5
+        conical_sharpness: 40.
+        conical_gain: 50.
+        damping: 50.
+        damping_sharpness: 20.
+        damping_radius: 0.1
+
     # type adept: ADEPT App. B.4 barrier (JointLimitBarrier) on range-normalised clearance
     #   x = (q_upper - q) / range; offsets are fractions of range, metric_scalar is the same in
     #   rad (root metric = k_b / (d - offset * range)^2), max_metric is per unit range^2

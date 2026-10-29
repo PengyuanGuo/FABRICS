@@ -583,8 +583,13 @@ class BaseFabric(torch.nn.Module):
                     torch.bmm(metric, torch.nn.functional.normalize(qd).unsqueeze(2)).squeeze()
         
         if self.fabric_params['speed_control']['active']:
+            # energy_target may be a per-env (N, 1) tensor (ADR-annealed, written in place so a
+            # captured CUDA graph sees new values); a Python float is frozen at capture time.
+            energy_target = self.fabric_params['speed_control']['energy_target']
+            if torch.is_tensor(energy_target) and energy_target.dim() == 2:
+                energy_target = energy_target[:, 0]
             speed_control_damping =\
-                    (energy > self.fabric_params['speed_control']['energy_target']) *\
+                    (energy > energy_target) *\
                     self.fabric_params['speed_control']['damping']
             force = force + speed_control_damping.unsqueeze(1) * mass_velocity
 
