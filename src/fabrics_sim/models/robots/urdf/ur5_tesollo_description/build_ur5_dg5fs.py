@@ -131,7 +131,8 @@ def rewrite_meshes(root: ET.Element, pattern: str, repl: str) -> None:
 
 
 def build(side: str, hand_src: Path, hand_sdf: str = "all", out_name: str | None = None,
-          hand_collider: str = "tesollo", with_mount: bool = False) -> Path:
+          hand_collider: str = "tesollo", with_mount: bool = False,
+          keep_knuckle_colliders: set[str] | None = None) -> Path:
     hand_prefix = f"{side}_"
     out = HERE / (out_name or f"ur5_dg5fs_{side}.urdf")
     sdf_links = HAND_SDF_MODE_LINKS[hand_sdf]
@@ -151,15 +152,19 @@ def build(side: str, hand_src: Path, hand_sdf: str = "all", out_name: str | None
         lim = next(j.find("limit") for j in hand.iter("joint") if j.get("name") == jname)
         print(f"  [limit] {jname}: ({lim.get('lower')}, {lim.get('upper')}) -> ({lo}, {hi})")
         lim.set("lower", f"{lo:.6f}"); lim.set("upper", f"{hi:.6f}")
+    # Knuckle colliders to drop: all of them by default; --keep-knuckle-colliders keeps some
+    # (sim URDF with mount: the pinky's exposed link_5_1); --with-mount alone keeps every mesh
+    # (fabric source, where the meshes only feed sphere fitting).
+    if keep_knuckle_colliders is None:
+        keep_knuckle_colliders = set(HAND_LINKS_WITHOUT_COLLISION) if with_mount else set()
+    drop = HAND_LINKS_WITHOUT_COLLISION - set(keep_knuckle_colliders)
     removed = []
     for link in hand.iter("link"):
-        if with_mount:
-            break  # fabric source: keep every mesh (knuckles included)
-        if link.get("name") in HAND_LINKS_WITHOUT_COLLISION:
+        if link.get("name") in drop:
             for col in link.findall("collision"):
                 link.remove(col)
                 removed.append(link.get("name"))
-    assert with_mount or set(removed) == HAND_LINKS_WITHOUT_COLLISION, f"collision removal mismatch: {removed}"
+    assert set(removed) == drop, f"collision removal mismatch: {removed} vs {sorted(drop)}"
     if hand_collider == "simple":
         for line in simplify_hand_colliders(hand):
             print("  [simple]", line)
@@ -190,7 +195,7 @@ def build(side: str, hand_src: Path, hand_sdf: str = "all", out_name: str | None
     ET.SubElement(attach, "child", {"link": root_link})
     robot.append(ET.Comment(f" ===== Tesollo DG5F-S {side} hand (from {hand_src.name}); "
                             f"hand collider={hand_collider} SDF mode={hand_sdf} <sdf {HAND_SDF_PARAMS}/>; "
-                            + (f"<collision> removed on {sorted(HAND_LINKS_WITHOUT_COLLISION)}" if not with_mount
+                            + (f"<collision> removed on {sorted(drop)}" if drop
                                else "all colliders kept (fabric source)") + " ===== "))
     robot.extend(list(hand))
 
@@ -213,6 +218,9 @@ if __name__ == "__main__":
     ap.add_argument("--with-mount", action="store_true",
                     help="fabric source: hand WITH mount plate (default --hand-src dg5fs_<side>_w_mount.urdf), "
                          "knuckle colliders kept; link_base ends where it does without the mount")
+    ap.add_argument("--keep-knuckle-colliders", nargs="*", default=None, metavar="LINK",
+                    help="knuckle links (unprefixed, e.g. link_5_1) that keep their <collision>; default: "
+                         "none, or all with --with-mount (fabric source)")
     ap.add_argument("--no-knuckle-colliders", action="store_true",
                     help="drop <collision> on link_x_1 (buried in the palm, never touches objects); works with any --hand-collider/--hand-sdf")
     a = ap.parse_args()
@@ -222,4 +230,6 @@ if __name__ == "__main__":
         SIMPLE_SEGMENT_RADIUS.update({2: a.seg_radius, 3: a.seg_radius, 4: a.seg_radius - 0.001})
     src = a.hand_src or (HERE / f"dg5fs_{a.side}_w_mount.urdf" if a.with_mount else DEFAULT_HAND_SRC[a.side])
     out = a.out or (f"ur5_dg5fs_{a.side}_w_mount.urdf" if a.with_mount else None)
-    print("wrote", build(a.side, src, a.hand_sdf, out, a.hand_collider, with_mount=a.with_mount))
+    keep = set(a.keep_knuckle_colliders) if a.keep_knuckle_colliders is not None else None
+    print("wrote", build(a.side, src, a.hand_sdf, out, a.hand_collider, with_mount=a.with_mount,
+                         keep_knuckle_colliders=keep))
