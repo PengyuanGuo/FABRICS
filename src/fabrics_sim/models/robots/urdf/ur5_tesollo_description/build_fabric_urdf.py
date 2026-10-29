@@ -11,7 +11,7 @@ Palm control-point frames (palm_x / ...) are omitted; add them later for
 Variant B / get_palm_pose diagnostics.
 
 Default I/O (paths relative to this file):
-  in:  ./ur5_dg5fs_left.urdf
+  in:  ./ur5_dg5fs_left_w_mount.urdf (build_ur5_dg5fs.py left --with-mount)
   out: ../ur5_tesollo/ur5_dg5fs_left_fabric.urdf
 
 Usage:
@@ -105,12 +105,42 @@ SPHERE_RADII = [ARM_RADII.get(frame, _HAND_RADII.get(frame)) for _, frame, _ in 
 if None in SPHERE_RADII:
     raise ValueError("every sphere frame needs a radius")
 
+# 30-sphere hand (fit_hand_spheres.py --profile s30). Its frames (<link>_s30_<k>)
+# are added to the same URDF; the s30 params yaml pairs them with the 12 arm
+# spheres above. Unused fixed frames cost nothing: the body_points taskmap only
+# evaluates the frames listed in the params yaml.
+# v2 hand (fit_hand_spheres.py --profile v2 on ur5_dg5fs_left_w_mount.urdf): knuckle
+# (left_link_<f>_1) to fingertip, tip caps may be 3.5 mm uncovered. Same mechanism.
+_ARM_FRAMES = [f for f in SPHERE_FRAMES if f[1] in ARM_RADII]
+
+
+def _profile(tag: str) -> tuple[list, list]:
+    path = Path(__file__).with_name(f"hand_collision_spheres_{tag}.json")
+    spheres = json.loads(path.read_text())["spheres"] if path.exists() else []
+    frames = _ARM_FRAMES + _fitted_frames(spheres)
+    return frames, [ARM_RADII[f[1]] for f in _ARM_FRAMES] + [s["radius"] for s in spheres]
+
+
+PROFILES = {tag: _profile(tag) for tag in ("s30", "v2")}
+S30_SPHERE_FRAMES, S30_SPHERE_RADII = PROFILES["s30"]
+
 
 def sync_params(path: Path) -> None:
-    """Update the sphere arrays without reformatting unrelated YAML settings."""
+    """Update the sphere arrays without reformatting unrelated YAML settings.
+
+    A yaml whose name contains ``_s30`` / ``_v2`` gets that hand set.
+    """
     text = path.read_text()
-    for key, values in (("collision_sphere_frames", [s[1] for s in SPHERE_FRAMES]),
-                        ("collision_sphere_radii", SPHERE_RADII)):
+    tag = next((t for t in PROFILES if f"_{t}" in path.name), None)
+    frames, radii = PROFILES[tag] if tag else (SPHERE_FRAMES, SPHERE_RADII)
+    # The yaml names its fabric URDF (Ur5TesolloFabric reads fabric_params.robot_urdf).
+    line = f"    robot_urdf: {PROFILE_URDF[tag]}\n"
+    if re.search(r"^    robot_urdf: .*\n", text, flags=re.M):
+        text = re.sub(r"^    robot_urdf: .*\n", line, text, flags=re.M)
+    else:
+        text = text.replace("fabric_params:\n", "fabric_params:\n" + line, 1)
+    for key, values in (("collision_sphere_frames", [s[1] for s in frames]),
+                        ("collision_sphere_radii", radii)):
         pattern = rf"(      {key}:\n)(?:          - [^\n]+\n)+"
         replacement = r"\g<1>" + "".join(f"          - {value}\n" for value in values)
         text, count = re.subn(pattern, replacement, text)
@@ -120,7 +150,9 @@ def sync_params(path: Path) -> None:
 
 
 def _default_src() -> Path:
-    return Path(__file__).resolve().parent / "ur5_dg5fs_left.urdf"
+    # Built by build_ur5_dg5fs.py left --with-mount: same 26 joints and link poses as the sim
+    # URDF, plus the mount plate and the knuckle (link_<f>_1) meshes the v2 spheres are fit on.
+    return Path(__file__).resolve().parent / "ur5_dg5fs_left_w_mount.urdf"
 
 
 def _default_dst() -> Path:
@@ -170,7 +202,13 @@ def _xyz_str(xyz: tuple[float, float, float]) -> str:
     return f"{xyz[0]} {xyz[1]} {xyz[2]}"
 
 
-def add_sphere_frames(root: ET.Element) -> list[str]:
+# One fabric URDF per sphere model: FK evaluates every link of the URDF, so a file
+# carrying all models' frames (120) cost every model ~50 % more per step.
+PROFILE_URDF = {None: "ur5_dg5fs_left_fabric", "s30": "ur5_dg5fs_left_fabric_s30",
+                "v2": "ur5_dg5fs_left_fabric_v2"}
+
+
+def add_sphere_frames(root: ET.Element, profile: str | None = None) -> list[str]:
     """Append empty fixed links/joints for body-sphere origins.
 
     If frame_name == parent_link, the existing link is used as the sphere
@@ -181,7 +219,7 @@ def add_sphere_frames(root: ET.Element) -> list[str]:
     existing_joints = {j.get("name") for j in root.findall("joint")}
     frame_names: list[str] = []
 
-    for parent, frame_name, xyz in SPHERE_FRAMES:
+    for parent, frame_name, xyz in (SPHERE_FRAMES if profile is None else PROFILES[profile][0]):
         if parent not in existing_links:
             raise ValueError(f"sphere parent link missing: {parent}")
 
@@ -223,7 +261,7 @@ def revolute_joint_names(root: ET.Element) -> list[str]:
     ]
 
 
-def build(src: Path, dst: Path) -> dict:
+def build(src: Path, dst: Path, profile: str | None = None) -> dict:
     if not src.is_file():
         raise FileNotFoundError(f"source URDF not found: {src}")
 
@@ -241,7 +279,7 @@ def build(src: Path, dst: Path) -> dict:
         if joint.get("type") == "fixed" and joint.find("axis") is not None:
             joint.remove(joint.find("axis"))
     baked = bake_joint_limits(root)
-    frames = add_sphere_frames(root)
+    frames = add_sphere_frames(root, profile)
 
     rev = revolute_joint_names(root)
     if tuple(rev) != EXPECTED_REVOLUTE_JOINTS:
@@ -273,13 +311,17 @@ def main() -> None:
         "--src",
         type=Path,
         default=_default_src(),
-        help="input URDF (default: sibling ur5_dg5fs_left.urdf)",
+        help="input URDF (default: sibling ur5_dg5fs_left_w_mount.urdf)",
     )
     parser.add_argument(
         "--dst",
         type=Path,
-        default=_default_dst(),
-        help="output fabric URDF (default: ../ur5_tesollo/ur5_dg5fs_left_fabric.urdf)",
+        default=None,
+        help="output fabric URDF for a single --profile (default: ../ur5_tesollo/<PROFILE_URDF>.urdf)",
+    )
+    parser.add_argument(
+        "--profile", choices=("all", "full", "s30", "v2"), default="all",
+        help="sphere model whose frames go into the URDF; all = one URDF per model (default)",
     )
     parser.add_argument(
         "--print-frames",
@@ -292,16 +334,21 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    info = build(args.src.resolve(), args.dst.resolve())
+    profiles = [None, "s30", "v2"] if args.profile == "all" else [None if args.profile == "full" else args.profile]
+    if args.dst is not None and len(profiles) > 1:
+        parser.error("--dst needs a single --profile")
+    for profile in profiles:
+        dst = args.dst or _default_dst().with_name(PROFILE_URDF[profile] + ".urdf")
+        info = build(args.src.resolve(), dst.resolve(), profile)
+        print(f"wrote {info['dst']}")
+        print(
+            f"  revolute={info['n_revolute']}  "
+            f"limits_baked={info['n_limits_baked']}  "
+            f"sphere_frames={info['n_sphere_frames']}  "
+            f"meshes_stripped={info['n_visual_collision_removed']}"
+        )
     for path in args.params:
         sync_params(path)
-    print(f"wrote {info['dst']}")
-    print(
-        f"  revolute={info['n_revolute']}  "
-        f"limits_baked={info['n_limits_baked']}  "
-        f"sphere_frames={info['n_sphere_frames']}  "
-        f"meshes_stripped={info['n_visual_collision_removed']}"
-    )
     if args.print_frames:
         print("collision_sphere_frames:")
         for name in info["sphere_frames"]:

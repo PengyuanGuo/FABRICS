@@ -1,0 +1,417 @@
+{
+  "margin_m": 0.001,
+  "method": "clipped_mesh_minimum_enclosing_spheres",
+  "profile": "v2",
+  "tip_allowance_m": 0.0035,
+  "arm_spheres": [],
+  "spheres": [
+    {
+      "parent": "left_link_base",
+      "frame": "left_link_base_v2_1",
+      "center": [
+        -0.002226,
+        -0.006958,
+        0.047502
+      ],
+      "radius": 0.047,
+      "fitted_center": [
+        0.000774,
+        -0.006958,
+        0.047502
+      ],
+      "enclosing_radius": 0.0587
+    },
+    {
+      "parent": "left_link_1_2",
+      "frame": "left_link_1_2_v2_1",
+      "center": [
+        0.007134,
+        -0.0,
+        -0.0
+      ],
+      "radius": 0.017,
+      "enclosing_radius": 0.017
+    },
+    {
+      "parent": "left_link_1_2",
+      "frame": "left_link_1_2_v2_2",
+      "center": [
+        0.029813,
+        0.000333,
+        0.0
+      ],
+      "radius": 0.017,
+      "enclosing_radius": 0.0178
+    },
+    {
+      "parent": "left_link_1_3",
+      "frame": "left_link_1_3_v2_1",
+      "center": [
+        0.006164,
+        -9e-06,
+        -1.2e-05
+      ],
+      "radius": 0.017,
+      "enclosing_radius": 0.0161
+    },
+    {
+      "parent": "left_link_1_3",
+      "frame": "left_link_1_3_v2_2",
+      "center": [
+        0.026418,
+        4e-06,
+        -3e-06
+      ],
+      "radius": 0.017,
+      "enclosing_radius": 0.0169
+    },
+    {
+      "parent": "left_link_1_4",
+      "frame": "left_link_1_4_v2_1",
+      "center": [
+        0.007705,
+        -1.1e-05,
+        -1e-06
+      ],
+      "radius": 0.017,
+      "enclosing_radius": 0.0175
+    },
+    {
+      "parent": "left_link_1_4",
+      "frame": "left_link_1_4_v2_2",
+      "center": [
+        0.030799,
+        2e-06,
+        9e-06
+      ],
+      "radius": 0.0142,
+      "enclosing_radius": 0.0129,
+      "override": {
+        "radius": 0.0142
+      }
+    },
+    {
+      "parent": "left_link_2_1",
+      "frame": "left_link_2_1_v2_1",
+      "center": [
+        0.015464,
+        0.0,
+        0.000453
+      ],
+      "radius": 0.0245,
+      "enclosing_radius": 0.0245,
+      "override": {
+        "radius": 0.0245
+      }
+    },
+    {
+      "parent": "left_link_2_2",
+      "frame": "left_link_2_2_v2_1",
+      "center": [
+        0.006982,
+        4e-06,
+        3e-06
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0169
+    },
+    {
+      "parent": "left_link_2_2",
+      "frame": "left_link_2_2_v2_2",
+      "center": [
+        0.027236,
+        -9e-06,
+        1.2e-05
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0161
+    },
+    {
+      "parent": "left_link_2_3",
+      "frame": "left_link_2_3_v2_1",
+      "center": [
+        0.018073,
+        -0.001341,
+        -0.001655
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0258,
+      "override": {
+        "offset": [
+          0.0,
+          0.0,
+          0.0015
+        ],
+        "radius": 0.0161
+      }
+    },
+    {
+      "parent": "left_link_2_4",
+      "frame": "left_link_2_4_v2_1",
+      "center": [
+        0.00573,
+        0.0,
+        -0.0
+      ],
+      "radius": 0.0159,
+      "enclosing_radius": 0.0159,
+      "override": {
+        "radius": 0.0159
+      }
+    },
+    {
+      "parent": "left_link_2_4",
+      "frame": "left_link_2_4_v2_2",
+      "center": [
+        0.022445,
+        -1e-06,
+        0.0
+      ],
+      "radius": 0.0124,
+      "enclosing_radius": 0.0104,
+      "override": {
+        "radius": 0.0124
+      }
+    },
+    {
+      "parent": "left_link_3_1",
+      "frame": "left_link_3_1_v2_1",
+      "center": [
+        0.015464,
+        0.0,
+        0.000453
+      ],
+      "radius": 0.0245
+    },
+    {
+      "parent": "left_link_3_2",
+      "frame": "left_link_3_2_v2_1",
+      "center": [
+        0.006982,
+        4e-06,
+        3e-06
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0169
+    },
+    {
+      "parent": "left_link_3_2",
+      "frame": "left_link_3_2_v2_2",
+      "center": [
+        0.027236,
+        -9e-06,
+        1.2e-05
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0161
+    },
+    {
+      "parent": "left_link_3_3",
+      "frame": "left_link_3_3_v2_1",
+      "center": [
+        0.018073,
+        -0.001341,
+        -0.001155
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0258,
+      "override": {
+        "offset": [
+          0.0,
+          0.0,
+          0.002
+        ],
+        "radius": 0.0161
+      }
+    },
+    {
+      "parent": "left_link_3_4",
+      "frame": "left_link_3_4_v2_1",
+      "center": [
+        0.00573,
+        0.0,
+        -0.0
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0159
+    },
+    {
+      "parent": "left_link_3_4",
+      "frame": "left_link_3_4_v2_2",
+      "center": [
+        0.022445,
+        -1e-06,
+        0.0
+      ],
+      "radius": 0.0126,
+      "enclosing_radius": 0.0104,
+      "override": {
+        "radius": 0.0126
+      }
+    },
+    {
+      "parent": "left_link_4_1",
+      "frame": "left_link_4_1_v2_1",
+      "center": [
+        0.015464,
+        0.0,
+        0.000453
+      ],
+      "radius": 0.0245
+    },
+    {
+      "parent": "left_link_4_2",
+      "frame": "left_link_4_2_v2_1",
+      "center": [
+        0.006982,
+        4e-06,
+        3e-06
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0169
+    },
+    {
+      "parent": "left_link_4_2",
+      "frame": "left_link_4_2_v2_2",
+      "center": [
+        0.027236,
+        -9e-06,
+        1.2e-05
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0161
+    },
+    {
+      "parent": "left_link_4_3",
+      "frame": "left_link_4_3_v2_1",
+      "center": [
+        0.017573,
+        -0.001341,
+        0.000345
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0258,
+      "override": {
+        "offset": [
+          -0.0005,
+          0.0,
+          0.0035
+        ],
+        "radius": 0.0161
+      }
+    },
+    {
+      "parent": "left_link_4_4",
+      "frame": "left_link_4_4_v2_1",
+      "center": [
+        0.00573,
+        0.0,
+        -0.0
+      ],
+      "radius": 0.0161,
+      "enclosing_radius": 0.0159
+    },
+    {
+      "parent": "left_link_4_4",
+      "frame": "left_link_4_4_v2_2",
+      "center": [
+        0.022445,
+        -1e-06,
+        0.0
+      ],
+      "radius": 0.013,
+      "enclosing_radius": 0.0104,
+      "override": {
+        "radius": 0.013
+      }
+    },
+    {
+      "parent": "left_link_5_1",
+      "frame": "left_link_5_1_v2_1",
+      "center": [
+        0.017273,
+        0.000999,
+        0.003002
+      ],
+      "radius": 0.0251
+    },
+    {
+      "parent": "left_link_5_2",
+      "frame": "left_link_5_2_v2_1",
+      "center": [
+        -0.002546,
+        0.0056,
+        0.002546
+      ],
+      "radius": 0.0197,
+      "enclosing_radius": 0.0219,
+      "override": {
+        "offset": [
+          0.0,
+          -0.008,
+          0.0
+        ],
+        "radius": 0.0197
+      }
+    },
+    {
+      "parent": "left_link_5_3",
+      "frame": "left_link_5_3_v2_1",
+      "center": [
+        0.010327,
+        -0.00016,
+        0.000345
+      ],
+      "radius": 0.0175,
+      "enclosing_radius": 0.0258,
+      "override": {
+        "offset": [
+          -0.005,
+          -0.0015,
+          0.0035
+        ],
+        "radius": 0.0175
+      }
+    },
+    {
+      "parent": "left_link_5_4",
+      "frame": "left_link_5_4_v2_1",
+      "center": [
+        0.006205,
+        1.1e-05,
+        1e-06
+      ],
+      "radius": 0.0175,
+      "enclosing_radius": 0.0175,
+      "override": {
+        "offset": [
+          -0.0015,
+          0.0,
+          0.0
+        ],
+        "radius": 0.0175
+      }
+    },
+    {
+      "parent": "left_link_5_4",
+      "frame": "left_link_5_4_v2_2",
+      "center": [
+        0.030799,
+        -2e-06,
+        -9e-06
+      ],
+      "radius": 0.0129,
+      "tip_allowance_m": 0.0035
+    },
+    {
+      "parent": "left_link_mount",
+      "frame": "left_link_mount_v2_1",
+      "center": [
+        -0.005523,
+        -0.0,
+        0.01075
+      ],
+      "radius": 0.0328
+    }
+  ]
+}

@@ -12,6 +12,7 @@
 #   (left_joint_{1..5}_{1..4}, thumb first).
 
 fabric_params:
+    robot_urdf: ur5_dg5fs_left_fabric
     # HD2 geometric posture attractor (not forcing). Target = default_config
     # set in Ur5TesolloFabric (arm home + lightly curled fingers).
     cspace_attractor:

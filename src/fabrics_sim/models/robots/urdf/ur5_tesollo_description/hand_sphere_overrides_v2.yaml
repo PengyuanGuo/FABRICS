@@ -1,0 +1,31 @@
+# Per-sphere overrides for the v2 hand (fit_hand_spheres.py --profile v2), applied after the rules.
+# Edit by hand or with the sphere editor in isaacsimenvs/tests/fabric_viser.py ("Save & rebuild").
+#   <sphere frame>: {radius: <m>, offset: [dx, dy, dz]}
+# radius replaces the rule's radius; offset (metres) is added to the centre, in the sphere's parent-link frame.
+#   <sphere frame>: {delete: true} drops the sphere.
+left_link_1_4_v2_2: {radius: 0.0142}
+left_link_2_1_v2_1: {radius: 0.0245}
+left_link_2_3_v2_1:
+  offset: [0.0, 0.0, 0.0015]
+  radius: 0.0161
+left_link_2_4_v2_1: {radius: 0.0159}
+left_link_2_4_v2_2: {radius: 0.0124}
+left_link_3_3_v2_1:
+  offset: [0.0, 0.0, 0.002]
+  radius: 0.0161
+left_link_3_4_v2_2: {radius: 0.0126}
+left_link_4_3_v2_1:
+  offset: [-0.0005, 0.0, 0.0035]
+  radius: 0.0161
+left_link_4_4_v2_2: {radius: 0.013}
+left_link_5_1_v2_2: {delete: true}
+left_link_5_2_v2_1:
+  offset: [0.0, -0.008, 0.0]
+  radius: 0.0197
+left_link_5_3_v2_1:
+  offset: [-0.005, -0.0015, 0.0035]
+  radius: 0.0175
+left_link_5_4_v2_1:
+  offset: [-0.0015, 0.0, 0.0]
+  radius: 0.0175
+left_link_mount_v2_2: {delete: true}

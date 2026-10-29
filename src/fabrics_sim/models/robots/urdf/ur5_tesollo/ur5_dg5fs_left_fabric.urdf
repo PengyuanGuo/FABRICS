@@ -127,11 +127,18 @@
     <parent link="ur5_flange" />
     <child link="ur5_tool0" />
   </joint>
-  <joint name="ur5_tool0_to_left_link_base" type="fixed">
-    <origin xyz="0.035 0 0.04" rpy="0 -1.57 0" />
+  <joint name="ur5_tool0_to_left_link_mount" type="fixed">
+    <origin xyz="0.05 0 0.04" rpy="0 -1.57 0" />
     <parent link="ur5_tool0" />
-    <child link="left_link_base" />
+    <child link="left_link_mount" />
   </joint>
+  <link name="left_link_mount">
+    <inertial>
+      <origin xyz="-4.8123E-18 -4.0604E-18 0.0087523" rpy="0 0 0" />
+      <mass value="0.11138" />
+      <inertia ixx="3.2927E-05" ixy="-4.7634E-21" ixz="4.3451E-21" iyy="3.3589E-05" iyz="3.9226E-21" izz="5.9839E-05" />
+    </inertial>
+  </link>
   <link name="left_link_base">
     <inertial>
       <origin xyz="0.0010507409240225 -0.003295678510169 0.0474860041095382" rpy="0 0 0" />
@@ -139,6 +146,11 @@
       <inertia ixx="0.00052610885566732" ixy="-4.29440440566715E-06" ixz="-1.44548153282054E-05" iyy="0.000390323594786542" iyz="4.09040025270616E-05" izz="0.000269845145247739" />
     </inertial>
   </link>
+  <joint name="left_joint_base" type="fixed">
+    <origin xyz="0 0 0.015" rpy="0 0 0" />
+    <parent link="left_link_mount" />
+    <child link="left_link_base" />
+  </joint>
   <link name="left_link_1_1">
     <inertial>
       <origin xyz="-2.03295586267971E-09 0.00601221888193745 0.00795349430839352" rpy="0 0 0" />

@@ -26,6 +26,10 @@ ARM_DROP_LINKS, ARM_DROP_JOINTS = {"world"}, {"base_joint"}
 # tool0 -> link_base.  손목을 -90deg(y축) 꺾은 사용자 값 (xyz 0.05 0 0.04, mount 두께 0.015 포함) 에서
 # mount 링크를 제거하면서 mount->base 오프셋 0.015 를 합성한 값. link_base 의 최종 위치는 동일.
 ATTACH_ORIGIN = {"xyz": "0.035 0 0.04", "rpy": "0 -1.57 0"}
+# --with-mount: tool0 -> link_mount 에 원래 사용자 값을 그대로 쓴다 (mount->base 0.015 는 hand URDF 의
+# joint_base 가 담당). link_base 의 최종 위치는 ATTACH_ORIGIN 과 동일. fabric (collision sphere) 용
+# 출력이며, 시뮬레이션 URDF (mount 없음, knuckle collider 제거) 는 그대로 둔다.
+ATTACH_MOUNT_ORIGIN = {"xyz": "0.05 0 0.04", "rpy": "0 -1.57 0"}
 
 # 손 collider 정책 (기본값 = 검증된 설정, 2026-09-02)
 #  - 손바닥 link_base: mesh + SDF (오목한 형상이라 convex hull 이면 knuckle/엄지가 파고들어 self-collision 시 발산).
@@ -127,7 +131,7 @@ def rewrite_meshes(root: ET.Element, pattern: str, repl: str) -> None:
 
 
 def build(side: str, hand_src: Path, hand_sdf: str = "all", out_name: str | None = None,
-          hand_collider: str = "tesollo") -> Path:
+          hand_collider: str = "tesollo", with_mount: bool = False) -> Path:
     hand_prefix = f"{side}_"
     out = HERE / (out_name or f"ur5_dg5fs_{side}.urdf")
     sdf_links = HAND_SDF_MODE_LINKS[hand_sdf]
@@ -149,11 +153,13 @@ def build(side: str, hand_src: Path, hand_sdf: str = "all", out_name: str | None
         lim.set("lower", f"{lo:.6f}"); lim.set("upper", f"{hi:.6f}")
     removed = []
     for link in hand.iter("link"):
+        if with_mount:
+            break  # fabric source: keep every mesh (knuckles included)
         if link.get("name") in HAND_LINKS_WITHOUT_COLLISION:
             for col in link.findall("collision"):
                 link.remove(col)
                 removed.append(link.get("name"))
-    assert set(removed) == HAND_LINKS_WITHOUT_COLLISION, f"collision removal mismatch: {removed}"
+    assert with_mount or set(removed) == HAND_LINKS_WITHOUT_COLLISION, f"collision removal mismatch: {removed}"
     if hand_collider == "simple":
         for line in simplify_hand_colliders(hand):
             print("  [simple]", line)
@@ -167,19 +173,25 @@ def build(side: str, hand_src: Path, hand_sdf: str = "all", out_name: str | None
     rename(hand, hand_prefix)
     hand_links = {l.get("name") for l in hand.iter("link")}
     assert f"{hand_prefix}link_base" in hand_links, "hand source must contain link_base"
-    assert f"{hand_prefix}link_mount" not in hand_links, "use the hand source WITHOUT mount"
+    if with_mount:
+        assert f"{hand_prefix}link_mount" in hand_links, "--with-mount needs the hand source WITH mount"
+    else:
+        assert f"{hand_prefix}link_mount" not in hand_links, "use the hand source WITHOUT mount"
+    root_link = f"{hand_prefix}link_mount" if with_mount else f"{hand_prefix}link_base"
 
     robot = ET.Element("robot", {"name": f"ur5_dg5fs_{side}"})
     robot.append(ET.Comment(" ===== UR5 arm (from ur5.urdf, Universal_Robots_ROS2_Description ur_type:=ur5) ===== "))
     robot.extend(list(arm))
-    robot.append(ET.Comment(" ===== arm -> hand attachment (wrist bent -90deg about y; mount plate removed) ===== "))
-    attach = ET.SubElement(robot, "joint", {"name": f"{ARM_PREFIX}tool0_to_{hand_prefix}link_base", "type": "fixed"})
-    ET.SubElement(attach, "origin", ATTACH_ORIGIN)
+    robot.append(ET.Comment(" ===== arm -> hand attachment (wrist bent -90deg about y; "
+                            + ("mount plate kept" if with_mount else "mount plate removed") + ") ===== "))
+    attach = ET.SubElement(robot, "joint", {"name": f"{ARM_PREFIX}tool0_to_{root_link}", "type": "fixed"})
+    ET.SubElement(attach, "origin", ATTACH_MOUNT_ORIGIN if with_mount else ATTACH_ORIGIN)
     ET.SubElement(attach, "parent", {"link": f"{ARM_PREFIX}tool0"})
-    ET.SubElement(attach, "child", {"link": f"{hand_prefix}link_base"})
+    ET.SubElement(attach, "child", {"link": root_link})
     robot.append(ET.Comment(f" ===== Tesollo DG5F-S {side} hand (from {hand_src.name}); "
                             f"hand collider={hand_collider} SDF mode={hand_sdf} <sdf {HAND_SDF_PARAMS}/>; "
-                            f"<collision> removed on {sorted(HAND_LINKS_WITHOUT_COLLISION)} ===== "))
+                            + (f"<collision> removed on {sorted(HAND_LINKS_WITHOUT_COLLISION)}" if not with_mount
+                               else "all colliders kept (fabric source)") + " ===== "))
     robot.extend(list(hand))
 
     ET.indent(robot, space="  ")
@@ -198,6 +210,9 @@ if __name__ == "__main__":
                     help="tesollo: original meshes (+SDF per --hand-sdf); simple: see SIMPLE_* above")
     ap.add_argument("--seg-radius", type=float, default=None,
                     help="simple mode: cylinder radius [m] for segments 2/3 (segment 4 uses radius - 1 mm)")
+    ap.add_argument("--with-mount", action="store_true",
+                    help="fabric source: hand WITH mount plate (default --hand-src dg5fs_<side>_w_mount.urdf), "
+                         "knuckle colliders kept; link_base ends where it does without the mount")
     ap.add_argument("--no-knuckle-colliders", action="store_true",
                     help="drop <collision> on link_x_1 (buried in the palm, never touches objects); works with any --hand-collider/--hand-sdf")
     a = ap.parse_args()
@@ -205,4 +220,6 @@ if __name__ == "__main__":
         HAND_LINKS_WITHOUT_COLLISION.update(SIMPLE_KNUCKLE_LINKS)
     if a.seg_radius is not None:
         SIMPLE_SEGMENT_RADIUS.update({2: a.seg_radius, 3: a.seg_radius, 4: a.seg_radius - 0.001})
-    print("wrote", build(a.side, a.hand_src or DEFAULT_HAND_SRC[a.side], a.hand_sdf, a.out, a.hand_collider))
+    src = a.hand_src or (HERE / f"dg5fs_{a.side}_w_mount.urdf" if a.with_mount else DEFAULT_HAND_SRC[a.side])
+    out = a.out or (f"ur5_dg5fs_{a.side}_w_mount.urdf" if a.with_mount else None)
+    print("wrote", build(a.side, src, a.hand_sdf, out, a.hand_collider, with_mount=a.with_mount))

@@ -99,7 +99,8 @@ class Ur5TesolloFabric(BaseFabric):
         )
 
         robot_dir_name = "ur5_tesollo"
-        robot_name = "ur5_dg5fs_left_fabric"
+        # Each sphere model has its own fabric URDF (only its frames); the params yaml names it.
+        robot_name = self.fabric_params.get("robot_urdf", "ur5_dg5fs_left_fabric")
         self.urdf_path = get_robot_urdf_path(robot_dir_name, robot_name)
         self.load_robot(robot_dir_name, robot_name, batch_size)
 
