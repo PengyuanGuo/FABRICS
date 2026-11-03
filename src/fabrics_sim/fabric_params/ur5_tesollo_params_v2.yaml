@@ -141,6 +141,31 @@ fabric_params:
       constant_accel: 3.
       constant_accel_geom: 5.
       damping_gain: 20.
+      # Table (world mesh) response per sphere group, used only when a world is loaded (A2).
+      # The distal finger spheres (13-17 mm) are fatter than the fingers: on the A1 policy
+      # (eval_phase5.py --table_stats, object still on the table) they reach 1-2 cm into the
+      # table plane at p1-p0.1 in normal grasps of the 17 mm handle, while palm / mount / arm
+      # stay >= 2 cm above it. So finger spheres meet the table with a smaller world radius
+      # (5 mm distal+middle, 8 mm proximal), engaging from 0.3 m so a fast hand still stops;
+      # arm / palm / mount keep the full sphere and engage_depth. Table check (sink goals,
+      # 256): worst mesh penetration 6.5 mm (full spheres 1.1 mm; 3 cm engage 150 mm).
+      # world_radius only applies to world meshes; first matching prefix wins.
+      world_sphere_overrides:
+        - {prefix: left_link_1_3, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_1_4, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_2_3, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_2_4, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_3_3, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_3_4, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_4_3, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_4_4, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_5_3, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_5_4, engage_depth: 0.3, world_radius: 0.005}
+        - {prefix: left_link_1_, engage_depth: 0.3, world_radius: 0.008}
+        - {prefix: left_link_2_, engage_depth: 0.3, world_radius: 0.008}
+        - {prefix: left_link_3_, engage_depth: 0.3, world_radius: 0.008}
+        - {prefix: left_link_4_, engage_depth: 0.3, world_radius: 0.008}
+        - {prefix: left_link_5_, engage_depth: 0.3, world_radius: 0.008}
       # 53 spheres: 12 arm, 6 palm, 35 finger (3 per distal link incl. tip); build_fabric_urdf.py --params syncs these.
       collision_sphere_frames:
           - ur5_shoulder_link_sphere1

@@ -299,6 +299,21 @@ class Ur5TesolloFabric(BaseFabric):
             self.collision_sphere_radii, device=self.device
         ).repeat(self.batch_size, 1)
 
+        # Per-sphere world response (table): world_sphere_overrides is a list of
+        # {prefix, engage_depth, world_radius}; the first rule whose prefix is a substring of
+        # the frame wins. world_radius replaces the sphere radius against world meshes only
+        # (may be negative: the centre may sink that far into the mesh before the barrier
+        # saturates). Other spheres keep engage_depth and their radius. Self pairs unaffected.
+        params = self.fabric_params["body_repulsion"]
+        engage, allowance = [], []
+        for frame, radius in zip(collision_sphere_frames, self.collision_sphere_radii):
+            rule = next((o for o in params.get("world_sphere_overrides", None) or []
+                         if o["prefix"] in frame), {})
+            engage.append(float(rule.get("engage_depth", params["engage_depth"])))
+            allowance.append(float(radius) - float(rule.get("world_radius", radius)))
+        params["world_engage_depths"] = engage
+        params["world_radius_allowances"] = allowance
+
         self.add_fabric(
             taskmap_name,
             "repulsion",

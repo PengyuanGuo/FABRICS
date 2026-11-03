@@ -35,6 +35,8 @@ def collision_response(
     velocity_gate_offset: float,
     sphere_mesh_checked: wp.array(dtype=wp.int32, ndim=3),
     sphere_collision_matrix: wp.array(dtype=wp.int64, ndim=2),
+    world_engage_depth: wp.array(dtype=float),
+    world_radius_allowance: wp.array(dtype=float),
     # outputs
     signed_sphere_distance: wp.array(dtype=float, ndim=2),
     base_acceleration: wp.array(dtype=wp.vec3, ndim=2),
@@ -100,8 +102,9 @@ def collision_response(
             dir_vel = -wp.dot(n, robot_body_point_vels[batch_index, point_index])
 
             # Safely save distance if it's the current smallest
-            # Shave off sphere radius
-            d_signed = d - sphere_radius[batch_index, point_index]
+            # Shave off sphere radius, less the per-sphere world allowance (lets e.g.
+            # finger spheres reach into the world mesh by that much; 0 = upstream)
+            d_signed = d - (sphere_radius[batch_index, point_index] - world_radius_allowance[point_index])
             # Clamp d so that it is postively bounded
             d = wp.clamp(d_signed, min_depth, max_depth)
 
@@ -114,7 +117,7 @@ def collision_response(
             #    then, create response
             #if d_signed <= engage_depth or (dir_vel < breakaway_velocity and d_signed < breakaway_depth):
             #if True: # dir_vel <= breakaway_velocity or d_signed <= breakaway_depth:
-            if d_signed <= engage_depth:
+            if d_signed <= world_engage_depth[point_index]:
 
                 # Add a weighted acceleration to the existing base acceleration response
                 wp.atomic_add(base_acceleration, batch_index, point_index, metric_scalar * (1./d) * n)
@@ -268,7 +271,9 @@ def eval_collision_response_func(point_positions, point_velocities, allocated_da
                   allocated_data['velocity_gate_sharpness'],
                   allocated_data['velocity_gate_offset'],
                   allocated_data['sphere_mesh_checked'],
-                  allocated_data['sphere_collision_matrix']
+                  allocated_data['sphere_collision_matrix'],
+                  allocated_data['world_engage_depth'],
+                  allocated_data['world_radius_allowance'],
                   ],
               outputs=[
                   allocated_data['signed_sphere_distance'],
@@ -352,6 +357,11 @@ class BaseFabricRepulsion():
         self._signed_distance = None
         self._in_collision = None
         self._metric_normalization = params.get('metric_normalization', 'body')
+        # Per-sphere world (mesh) response: engage depth and radius allowance. Robot fabrics
+        # fill these from world_sphere_overrides; default = engage_depth / 0 for every sphere.
+        world_engage = params.get('world_engage_depths', [params['engage_depth']] * self._num_points)
+        world_allowance = params.get('world_radius_allowances', [0.] * self._num_points)
+        assert len(world_engage) == self._num_points and len(world_allowance) == self._num_points
         
         # Dictionary of various signals required for repulsion calculations.
         self.allocated_data =\
@@ -375,6 +385,8 @@ class BaseFabricRepulsion():
               'velocity_gate_offset': params['velocity_gate_offset'],
               'sphere_mesh_checked': None,
               'sphere_collision_matrix': wp.torch.from_torch(collision_matrix),
+              'world_engage_depth': wp.array(world_engage, dtype=float, device=device),
+              'world_radius_allowance': wp.array(world_allowance, dtype=float, device=device),
               'signed_sphere_distance': wp.zeros(shape=(batch_size, self._num_points), dtype=float, device=device),
               'base_acceleration': wp.zeros(shape=(batch_size, self._num_points), dtype=wp.vec3, device=device),
               # Block-diagonal body metric: one 3x3 block per sphere (off-diagonal blocks are
